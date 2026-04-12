@@ -18,11 +18,11 @@ BACKUP_PATH="${INSTALL_DIR}/vohive.bak"
 SERVICE_PATH="/etc/systemd/system/vohive.service"
 
 log() { printf '[vohive-install] %s\n' "$*"; }
-err() { printf '[vohive-install] ERROR: %s\n' "$*" >&2; }
+err() { printf '[vohive-install] 错误: %s\n' "$*" >&2; }
 
 usage() {
   cat <<USAGE
-Usage: install.sh [options]
+用法: install.sh [选项]
   --version <vX.Y.Z|latest|stable>
   --channel <stable|latest>
   --no-systemd
@@ -45,14 +45,14 @@ run_root() {
   elif command -v sudo >/dev/null 2>&1; then
     sudo "$@"
   else
-    err "Root privileges are required (run as root or install sudo)."
+    err "需要 root 权限（请使用 root 用户或安装 sudo）。"
     exit 1
   fi
 }
 
 need_cmd() {
   command -v "$1" >/dev/null 2>&1 || {
-    err "Missing command: $1"
+    err "缺少命令: $1"
     exit 1
   }
 }
@@ -70,7 +70,7 @@ resolve_version() {
   local resolved
   resolved="$(printf '%s\n' "${latest_json}" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)"
   if [[ -z "${resolved}" ]]; then
-    err "Cannot resolve latest release tag from GitHub API."
+    err "无法从 GitHub API 获取最新 Release 版本号。"
     exit 1
   fi
   printf '%s\n' "${resolved}"
@@ -104,7 +104,7 @@ parse_args() {
         exit 0
         ;;
       *)
-        err "Unknown argument: $1"
+        err "未知参数: $1"
         usage
         exit 1
         ;;
@@ -117,7 +117,7 @@ detect_arch() {
     x86_64|amd64) echo "amd64" ;;
     aarch64|arm64) echo "arm64" ;;
     *)
-      err "Unsupported architecture: $(uname -m)"
+      err "不支持的架构: $(uname -m)"
       exit 1
       ;;
   esac
@@ -186,10 +186,10 @@ print_access_info() {
     links="${links} http://${ip}:${port}"
   done
 
-  log "Minimal config ready: ${CONFIG_DIR}/config.yaml"
-  log "Default Web credentials: admin / admin"
+  log "最小配置已生成: ${CONFIG_DIR}/config.yaml"
+  log "默认 Web 账号密码: admin / admin"
   for ip in ${links}; do
-    log "One-click URL: ${ip}"
+    log "一键访问链接: ${ip}"
   done
 }
 
@@ -202,7 +202,7 @@ main() {
 
   local os="$(uname -s | tr '[:upper:]' '[:lower:]')"
   if [[ "${os}" != "linux" ]]; then
-    err "Unsupported OS: ${os}"
+    err "不支持的系统: ${os}"
     exit 1
   fi
 
@@ -220,8 +220,8 @@ main() {
 
   local tarball="${tmp}/${asset}"
 
-  log "Resolved version: ${resolved_version}"
-  log "Downloading artifacts from ${base}"
+  log "已解析版本: ${resolved_version}"
+  log "正在下载二进制: ${base}"
 
   curl -fsSL "${base}/${asset}" -o "${tarball}"
 
@@ -229,19 +229,19 @@ main() {
   local extracted
   extracted="$(find "${tmp}" -maxdepth 1 -type f -name "vohive_${resolved_version}_linux_${arch}" | head -n1)"
   if [[ -z "${extracted}" ]]; then
-    err "Extracted binary not found in package"
+    err "压缩包中未找到可执行文件"
     exit 1
   fi
 
   if [[ -x "${BIN_PATH}" ]]; then
-    log "Backing up existing binary to ${BACKUP_PATH}"
+    log "检测到已安装版本，备份到: ${BACKUP_PATH}"
     run_root cp -f "${BIN_PATH}" "${BACKUP_PATH}"
   fi
 
   local rollback_needed=0
   rollback() {
     if [[ "${rollback_needed}" == "1" && -f "${BACKUP_PATH}" ]]; then
-      err "Rolling back to previous binary"
+      err "正在回滚到上一个版本"
       run_root cp -f "${BACKUP_PATH}" "${BIN_PATH}" || true
       if [[ "${NO_SYSTEMD}" == "0" && -x "$(command -v systemctl || true)" ]]; then
         run_root systemctl restart vohive || true
@@ -258,19 +258,19 @@ main() {
     local unit_tmp="${tmp}/vohive.service"
     if ! install_systemd "${unit_tmp}"; then
       rollback
-      err "systemd installation/start failed"
+      err "systemd 安装或启动失败"
       exit 1
     fi
   fi
 
   rollback_needed=0
-  log "Install complete: ${BIN_PATH} (${resolved_version})"
+  log "安装完成: ${BIN_PATH} (${resolved_version})"
   if [[ "${NO_SYSTEMD}" == "0" ]]; then
-    log "Service status: running (systemd)"
+    log "服务状态: 运行中（systemd）"
     print_access_info
   else
-    log "Systemd installation skipped (--no-systemd)"
-    log "Run manually: ${BIN_PATH} -c ${CONFIG_DIR}/config.yaml"
+    log "已跳过 systemd 安装（--no-systemd）"
+    log "手动启动命令: ${BIN_PATH} -c ${CONFIG_DIR}/config.yaml"
     print_access_info
   fi
 }
